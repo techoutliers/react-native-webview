@@ -40,6 +40,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.content.ActivityNotFoundException;
+import android.content.pm.ResolveInfo;
 
 import com.facebook.react.views.scroll.ScrollEvent;
 import com.facebook.react.views.scroll.ScrollEventType;
@@ -84,6 +86,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.net.URISyntaxException;
 
 import javax.annotation.Nullable;
 
@@ -142,6 +145,31 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
   protected boolean mAllowsFullscreenVideo = false;
   protected @Nullable String mUserAgent = null;
   protected @Nullable String mUserAgentWithApplicationName = null;
+
+  // protected void onCreate(Bundle savedInstanceState) {
+  //   alertIsp = new AlertDialog.Builder(PaymentView.this)
+  //     .setIcon(android.R.drawable.ic_dialog_alert)
+  //     .setTitle("알림")
+  //     .setMessage("모바일 ISP 어플리케이션이 설치되어 있지 않습니다. \n설치를
+  //     눌러 진행 해 주십시요.\n취소를 누르면 결제가 취소 됩니다.")
+  //     .setPositiveButton("설치", new DialogInterface.OnClickListener() {
+  //       @Override
+  //       public void onClick(DialogInterface dialog, int which) {
+       
+  //       //ISP 설치 페이지 URL
+  //       paymentView.loadUrl("http://mobile.vpay.co.kr/jsp/MISP/andown.jsp");
+  //       finish();
+  //       }
+  //      })
+  //       .setNegativeButton("취소", new DialogInterface.OnClickListener() {
+  //       @Override
+  //       public void onClick(DialogInterface dialog, int which) {
+  //       Toast.makeText(PaymentView.this, "(-1)결제를 취소 하셨습니다." ,
+  //      Toast.LENGTH_SHORT).show();
+  //       finish();
+  //       }
+  //      }).create(); 
+  // }
 
   public RNCWebViewManager() {
     mWebViewConfig = new WebViewConfig() {
@@ -791,14 +819,41 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
 
     @Override
     public boolean shouldOverrideUrlLoading(WebView view, String url) {
-      progressChangedFilter.setWaitingForCommandLoadUrl(true);
-      dispatchEvent(
-        view,
-        new TopShouldStartLoadWithRequestEvent(
-          view.getId(),
-          createWebViewEvent(view, url)));
-      return true;
-    }
+      if (url.startsWith("intent://")) {
+          try {
+              Context context = view.getContext();
+              Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+  
+              if (intent != null) {
+                  view.stopLoading();
+  
+                  PackageManager packageManager = context.getPackageManager();
+                  ResolveInfo info = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
+                  if (info != null) {
+                      context.startActivity(intent);
+                  } else {
+                      String fallbackUrl = intent.getStringExtra("browser_fallback_url");
+                      view.loadUrl(fallbackUrl);
+  
+                      // or call external broswer
+  //                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl));
+  //                    context.startActivity(browserIntent);
+                  }
+  
+                  return true;
+              }
+            } catch (URISyntaxException e) {
+              Log.e("WEBVIEW", "Can't resolve intent://", e);
+            }
+        }
+      else if(url.startsWith("market://")){
+        view.stopLoading();
+        view.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        return true;
+      }
+  
+      return false;
+  }
 
 
     @TargetApi(Build.VERSION_CODES.N)
